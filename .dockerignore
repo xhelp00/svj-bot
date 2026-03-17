@@ -1,0 +1,9 @@
+.env
+.env.example
+.gitignore
+*.json
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+dist/
