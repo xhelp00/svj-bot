@@ -93,7 +93,12 @@ def should_respond(message: str) -> bool:
         return False
 
 
-def generate_response(system_prompt: str, user_message: str, sender_name: str = None) -> str:
+def generate_response(
+    system_prompt: str,
+    user_message: str,
+    sender_name: str = None,
+    history: list[dict] = None,
+) -> str:
     """
     Generate a response using Gemini.
 
@@ -101,11 +106,25 @@ def generate_response(system_prompt: str, user_message: str, sender_name: str = 
         system_prompt: The full system prompt with knowledge base
         user_message: The user's question
         sender_name: Unused, kept for API compatibility
+        history: List of previous messages [{"role": "user"/"bot", "text": str}]
 
     Returns:
         The model's response text
     """
     model = _get_model()
+
+    # Build conversation context from history
+    context_block = ""
+    if history:
+        context_lines = []
+        for entry in history:
+            label = "Člen SVJ" if entry["role"] == "user" else "Asistent"
+            context_lines.append(f"{label}: {entry['text']}")
+        context_block = (
+            "\n\n--- Předchozí konverzace (pro kontext) ---\n"
+            + "\n".join(context_lines)
+            + "\n--- Konec předchozí konverzace ---\n"
+        )
 
     try:
         response = model.generate_content(
@@ -114,6 +133,7 @@ def generate_response(system_prompt: str, user_message: str, sender_name: str = 
                     "role": "user",
                     "parts": [
                         system_prompt
+                        + context_block
                         + "\n\n---\n\nDotaz od člena SVJ:\n"
                         + user_message
                     ],
