@@ -52,6 +52,7 @@ The Node.js bridge forwards messages to the Python API over localhost. The Pytho
 - **Rate limiting** — DMs limited to 10 messages/hour per sender to prevent abuse
 - **Admin commands** — `!reload` to refresh knowledge base, `!factcheck` to trigger manual fact-check (admin-only)
 - **Auto-reload** — documents refresh from Google Drive every hour
+- **Group whitelist** — bot only operates in explicitly allowed groups; auto-leaves any unauthorized group immediately
 - **Session persistence** — WhatsApp session survives container restarts via Docker volume
 - **Proactive messaging** — bridge exposes `/send` endpoint for bot-initiated DMs (used by fact-check)
 
@@ -163,6 +164,7 @@ ssh root@YOUR_VPS_IP "cd /opt/svj-bot && docker compose down whatsapp-bridge && 
 | `PYTHON_API_URL` | Python API URL (set in docker-compose.yml, default: `http://python-api:8080`) |
 | `BRIDGE_URL` | WhatsApp bridge URL for proactive messaging (default: `http://whatsapp-bridge:3000`) |
 | `BRIDGE_PORT` | Port for the bridge HTTP server (default: `3000`) |
+| `ALLOWED_GROUP_IDS` | Comma-separated whitelist of WhatsApp group JIDs (e.g., `120363406060112788@g.us`). If set, bot auto-leaves any other group. |
 
 ## Security
 
@@ -174,6 +176,7 @@ ssh root@YOUR_VPS_IP "cd /opt/svj-bot && docker compose down whatsapp-bridge && 
 - **Rate limiting** — DMs capped at 10/hour per sender to prevent cost abuse
 - **fail2ban** — SSH brute-force protection enabled on VPS
 - **SSH hardened** — password authentication disabled, key-only access
+- **Group whitelist** — bot only responds in allowed groups (`ALLOWED_GROUP_IDS`); auto-leaves unauthorized groups on first message
 - **No exposed ports** — only SSH (22) is publicly accessible; API and bridge are localhost/Docker-internal only
 - **Finance blocking** — bot refuses to answer financial questions to prevent misinformation
 
