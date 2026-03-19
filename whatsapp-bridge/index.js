@@ -1,6 +1,8 @@
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
 
 const PYTHON_API_URL =
   process.env.PYTHON_API_URL || "http://localhost:8080";
@@ -10,6 +12,25 @@ const PYTHON_API_URL =
 const ALLOWED_GROUP_IDS = process.env.ALLOWED_GROUP_IDS
   ? process.env.ALLOWED_GROUP_IDS.split(",").map((s) => s.trim()).filter(Boolean)
   : [];
+
+// Clean up stale Chromium lock files to prevent restart failures
+const AUTH_DIR = "/app/.wwebjs_auth";
+function cleanChromiumLocks(dir) {
+  const lockFiles = ["SingletonLock", "SingletonCookie", "SingletonSocket"];
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true, recursive: true });
+    for (const entry of entries) {
+      if (lockFiles.includes(entry.name)) {
+        const fullPath = path.join(entry.parentPath || entry.path, entry.name);
+        fs.unlinkSync(fullPath);
+        console.log(`[CLEANUP] Removed stale lock: ${fullPath}`);
+      }
+    }
+  } catch (e) {
+    // Auth dir may not exist on first run
+  }
+}
+cleanChromiumLocks(AUTH_DIR);
 
 const client = new Client({
   authStrategy: new LocalAuth({ dataPath: "/app/.wwebjs_auth" }),
