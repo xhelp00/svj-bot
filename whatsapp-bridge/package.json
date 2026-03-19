@@ -1,0 +1,14 @@
+{
+  "name": "svj-bot-whatsapp-bridge",
+  "version": "1.0.0",
+  "description": "WhatsApp Web bridge for SVJ Bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "whatsapp-web.js": "^1.26.0",
+    "qrcode-terminal": "^0.12.0",
+    "axios": "^1.7.0"
+  }
+}
