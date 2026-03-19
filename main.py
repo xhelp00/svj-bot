@@ -3,14 +3,16 @@
 import os
 import time
 import logging
+from datetime import datetime, date
 from collections import defaultdict, deque
 
-from fastapi import FastAPI, Request
+import httpx
+from fastapi import FastAPI, Request, BackgroundTasks
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from knowledge_base import build_knowledge_base, invalidate_cache
-from llm import generate_response, should_respond
+from llm import generate_response, should_respond, fact_check_messages
 
 load_dotenv()
 
@@ -30,6 +32,43 @@ ADMIN_PHONE = os.environ.get("ADMIN_PHONE", "420720994342")
 MAX_HISTORY = 5
 # Key: chat_id (group) or sender (DM) → deque of {"role": "user"/"bot", "text": str}
 _conversation_history: dict[str, deque] = defaultdict(lambda: deque(maxlen=MAX_HISTORY))
+
+# --- Daily message log for fact-checking ---
+# Stores all group messages for the current day: list of {"sender_name": str, "text": str, "time": str}
+_daily_messages: list[dict] = []
+_daily_messages_date: str = ""  # YYYY-MM-DD of current log
+
+BRIDGE_URL = os.environ.get("BRIDGE_URL", "http://whatsapp-bridge:3000")
+
+
+def _log_daily_message(sender_name: str, text: str):
+    """Store a group message in the daily log for fact-checking."""
+    global _daily_messages, _daily_messages_date
+    today = date.today().isoformat()
+    # Reset log on new day
+    if _daily_messages_date != today:
+        _daily_messages = []
+        _daily_messages_date = today
+    _daily_messages.append({
+        "sender_name": sender_name,
+        "text": text,
+        "time": datetime.now().strftime("%H:%M"),
+    })
+
+
+async def _send_admin_dm(text: str):
+    """Send a direct message to the admin via the WhatsApp bridge."""
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{BRIDGE_URL}/send",
+                json={"to": f"{ADMIN_PHONE}@c.us", "text": text},
+                timeout=30,
+            )
+            logger.info(f"Admin DM sent: {resp.status_code}")
+    except Exception as e:
+        logger.error(f"Failed to send admin DM: {e}")
+
 
 # --- Rate limiting (DM only) ---
 RATE_LIMIT_MAX = 10  # max messages per window
@@ -120,12 +159,19 @@ async def handle_message(msg: MessageRequest):
 
     try:
         # Admin commands
-        if msg.sender == ADMIN_PHONE and msg.text.strip().lower() == "!reload":
-            invalidate_cache()
-            system_prompt = build_knowledge_base(building_name=BUILDING_NAME)
-            return MessageResponse(
-                reply=f"Znalostní báze aktualizována. Načteno {len(system_prompt)} znaků."
-            )
+        if msg.sender == ADMIN_PHONE:
+            cmd = msg.text.strip().lower()
+            if cmd == "!reload":
+                invalidate_cache()
+                system_prompt = build_knowledge_base(building_name=BUILDING_NAME)
+                return MessageResponse(
+                    reply=f"Znalostní báze aktualizována. Načteno {len(system_prompt)} znaků."
+                )
+            if cmd == "!factcheck":
+                await _run_factcheck()
+                return MessageResponse(
+                    reply=f"Fact-check spuštěn pro {len(_daily_messages)} zpráv. Výsledek přijde v DM."
+                )
 
         # Rate limiting for DMs only
         if not msg.is_group and _is_rate_limited(msg.sender):
@@ -133,6 +179,10 @@ async def handle_message(msg: MessageRequest):
             return MessageResponse(
                 reply="Překročili jste limit zpráv (10 za hodinu). Zkuste to prosím později."
             )
+
+        # Log all group messages for daily fact-checking
+        if msg.is_group:
+            _log_daily_message(msg.sender_name, msg.text)
 
         # For group messages, check if bot should respond
         if msg.is_group:
@@ -187,6 +237,31 @@ async def handle_message(msg: MessageRequest):
         return MessageResponse(
             reply="Omlouvám se, došlo k chybě. Zkuste to prosím znovu později."
         )
+
+
+async def _run_factcheck():
+    """Run fact-check on today's group messages and DM results to admin."""
+    if not _daily_messages:
+        await _send_admin_dm("📋 Fact-check: Dnes nebyly žádné zprávy ve skupině.")
+        return
+
+    system_prompt = build_knowledge_base(building_name=BUILDING_NAME)
+    result = fact_check_messages(system_prompt, _daily_messages)
+
+    if result:
+        await _send_admin_dm(f"📋 Denní fact-check ({_daily_messages_date}):\n\n{result}")
+    else:
+        await _send_admin_dm(
+            f"📋 Fact-check ({_daily_messages_date}): "
+            f"Zkontrolováno {len(_daily_messages)} zpráv, žádné nepřesnosti nenalezeny. ✅"
+        )
+
+
+@app.post("/factcheck")
+async def trigger_factcheck():
+    """Trigger daily fact-check (called by cron or manually)."""
+    await _run_factcheck()
+    return {"status": "done", "messages_checked": len(_daily_messages)}
 
 
 @app.post("/reload")

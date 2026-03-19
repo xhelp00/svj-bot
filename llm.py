@@ -111,6 +111,75 @@ def should_respond(message: str, history: list[dict] = None) -> bool:
         return False
 
 
+FACTCHECK_PROMPT = """Jsi kontrolor faktů pro SVJ (Společenství vlastníků jednotek).
+
+Níže jsou zprávy z dnešní skupinové konverzace a dokumenty SVJ (stanovy, domovní řád, pravidla).
+
+Tvůj úkol:
+1. Projdi všechny zprávy od členů SVJ
+2. Identifikuj zprávy, kde někdo tvrdí něco o pravidlech, postupech nebo fungování SVJ
+3. Porovnej tato tvrzení s dokumenty SVJ
+4. Pokud najdeš NEPŘESNOST nebo CHYBU, uveď ji
+
+DŮLEŽITÉ:
+- Ignoruj běžnou konverzaci, pozdravy, názory a dotazy
+- Zaměř se POUZE na faktická tvrzení o pravidlech SVJ, která jsou v rozporu s dokumenty
+- Pokud nikdo netvrdil nic špatně, odpověz prázdným řetězcem
+- Nebuď přehnaně přísný — drobné nepřesnosti ve formulaci ignoruj
+- Hlásit pouze jasné faktické chyby
+
+Formát odpovědi (pokud najdeš chyby):
+• [Jméno] tvrdil: "[co řekl]" — Podle dokumentů SVJ: [co je správně]
+
+Pokud žádné chyby nenajdeš, odpověz POUZE: NONE
+
+--- DOKUMENTY SVJ ---
+{knowledge_base}
+
+--- DNEŠNÍ ZPRÁVY ---
+{messages}
+"""
+
+
+def fact_check_messages(system_prompt: str, messages: list[dict]) -> str | None:
+    """
+    Fact-check a day's worth of group messages against SVJ documents.
+
+    Args:
+        system_prompt: The knowledge base content
+        messages: List of {"sender_name": str, "text": str, "time": str}
+
+    Returns:
+        String with findings, or None if no issues found
+    """
+    model = _get_model()
+
+    # Format messages
+    msg_lines = []
+    for m in messages:
+        msg_lines.append(f"[{m['time']}] {m['sender_name']}: {m['text']}")
+    messages_text = "\n".join(msg_lines)
+
+    try:
+        prompt = FACTCHECK_PROMPT.format(
+            knowledge_base=system_prompt,
+            messages=messages_text,
+        )
+        response = model.generate_content(prompt)
+        result = response.text.strip()
+
+        if result.upper() == "NONE" or not result:
+            logger.info("Fact-check: no issues found")
+            return None
+
+        logger.info(f"Fact-check: found issues ({len(result)} chars)")
+        return result
+
+    except Exception as e:
+        logger.error(f"Fact-check error: {e}")
+        return f"Chyba při fact-checku: {e}"
+
+
 def generate_response(
     system_prompt: str,
     user_message: str,

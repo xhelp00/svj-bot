@@ -14,6 +14,7 @@ services:
       - python-api
     environment:
       - PYTHON_API_URL=http://python-api:8080
+      - BRIDGE_PORT=3000
     volumes:
       - whatsapp_session:/app/.wwebjs_auth
     restart: unless-stopped

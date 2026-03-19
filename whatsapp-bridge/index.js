@@ -107,5 +107,30 @@ client.on("message", async (msg) => {
   }
 });
 
+// --- HTTP server for proactive messaging (used by Python API) ---
+const express = require("express");
+const expressApp = express();
+expressApp.use(express.json());
+
+expressApp.post("/send", async (req, res) => {
+  const { to, text } = req.body;
+  if (!to || !text) {
+    return res.status(400).json({ error: "Missing 'to' or 'text'" });
+  }
+  try {
+    await client.sendMessage(to, text);
+    console.log(`[SEND] → ${to}: ${text.substring(0, 80)}...`);
+    res.json({ status: "sent" });
+  } catch (error) {
+    console.error("Error sending message:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+const BRIDGE_PORT = process.env.BRIDGE_PORT || 3000;
+expressApp.listen(BRIDGE_PORT, () => {
+  console.log(`Bridge HTTP server listening on port ${BRIDGE_PORT}`);
+});
+
 console.log("Starting WhatsApp Web client...");
 client.initialize();
