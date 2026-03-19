@@ -1,0 +1,29 @@
+name: Export draw.io diagrams
+
+on:
+  push:
+    paths:
+      - "**.drawio"
+    branches:
+      - main
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Export draw.io to SVG
+        uses: rlespinasse/drawio-export-action@v2
+        with:
+          format: svg
+          transparent: true
+
+      - name: Commit exported SVG
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A *.svg
+          git diff --staged --quiet || git commit -m "docs: auto-export draw.io diagrams to SVG"
+          git push
