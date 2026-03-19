@@ -26,11 +26,18 @@ jobs:
           format: svg
           transparent: true
           output: .
+          action-mode: all
 
       - name: Commit exported SVG
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A "*.svg"
-          git diff --staged --quiet || git commit -m "docs: auto-export draw.io diagrams to SVG"
-          git push
+          if compgen -G "*.svg" > /dev/null; then
+            git add *.svg
+            git diff --staged --quiet || {
+              git commit -m "docs: auto-export draw.io diagrams to SVG"
+              git push
+            }
+          else
+            echo "No SVG files generated"
+          fi
