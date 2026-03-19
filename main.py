@@ -58,6 +58,36 @@ def _get_history_key(msg) -> str:
     return msg.sender
 
 
+# Phrases that indicate the bot doesn't have a useful answer
+_UNCERTAIN_PHRASES = [
+    "nemohu odpovídat",
+    "nemohu odpovědět",
+    "nemám k dispozici",
+    "nemám informace",
+    "nenalezl jsem",
+    "nenašel jsem",
+    "není v dokumentech",
+    "není v mých dokumentech",
+    "obraťte se na výbor",
+    "kontaktujte výbor",
+    "kontaktujte správce",
+    "doporučuji kontaktovat",
+    "doporučuji obrátit se",
+    "nemohu poskytnout",
+    "nemám dostatek informací",
+    "tuto informaci nemám",
+    "bohužel nemám",
+    "bohužel nemohu",
+    "na dotazy týkající se financí",
+]
+
+
+def _is_uncertain_response(reply: str) -> bool:
+    """Check if the bot's reply indicates it doesn't know the answer."""
+    reply_lower = reply.lower()
+    return any(phrase in reply_lower for phrase in _UNCERTAIN_PHRASES)
+
+
 class MessageRequest(BaseModel):
     text: str
     sender: str
@@ -129,6 +159,16 @@ async def handle_message(msg: MessageRequest):
         reply = generate_response(
             system_prompt, msg.text, sender_name=msg.sender_name, history=history
         )
+
+        # In groups, suppress "I don't know" responses — only reply when adding value
+        if msg.is_group and reply and _is_uncertain_response(reply):
+            logger.info(
+                f"Suppressing uncertain response in group for: {msg.text[:60]}"
+            )
+            _conversation_history[history_key].append(
+                {"role": "user", "text": msg.text}
+            )
+            return MessageResponse(reply=None)
 
         # Store both user message and bot reply in history
         _conversation_history[history_key].append(
