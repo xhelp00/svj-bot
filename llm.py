@@ -62,6 +62,7 @@ Bot NEMÁ odpovědět když zpráva:
 - Je odpověď na předchozí konverzaci mezi lidmi
 - Je pouhý emoji, smích, souhlas ("ok", "díky", "👍")
 - Je nabídka/prodej osobních věcí
+- Týká se financí, poplatků, záloh, vyúčtování, dluhů, plateb nebo rozpočtu SVJ
 
 Zpráva: "{message}"
 
