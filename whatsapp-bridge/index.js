@@ -127,6 +127,12 @@ client.on("message", async (msg) => {
   const text = msg.body;
   if (!text || text.trim().length === 0) return;
 
+  // Block messages from unauthorized groups
+  if (isGroup && ALLOWED_GROUP_IDS.length > 0 && !ALLOWED_GROUP_IDS.includes(chatId)) {
+    console.warn(`[SECURITY] Message from unauthorized group ${chatId}, ignoring`);
+    return;
+  }
+
   console.log(
     `[${isGroup ? "GROUP" : "DM"}] ${senderName} (${phoneNumber}): ${text}`
   );
