@@ -48,19 +48,32 @@ The Node.js bridge forwards messages to the Python API over localhost. The Pytho
 - **Czech language** — responds in Czech, handles Czech input natively
 - **Group chat support** — intelligently decides when to respond in group conversations using an LLM classifier
 - **Knowledge-based answers** — answers only from uploaded documents
+- **Conversation context** — remembers last 5 messages per chat for follow-up questions (e.g., "a co o víkendech?" after asking about noise rules)
+- **Smart silence** — in groups, the bot stays silent when it doesn't have a useful answer instead of saying "I don't know"
+- **Daily fact-check** — collects all group messages and runs a nightly fact-check against SVJ documents; sends findings to admin via DM
+- **Finance topic blocking** — refuses to answer questions about fees, payments, budgets — redirects to the committee
 - **Prompt injection protection** — refuses to reveal instructions, settings, or document names
-- **Admin commands** — `!reload` to refresh knowledge base (admin-only)
+- **Rate limiting** — DMs limited to 10 messages/hour per sender to prevent abuse
+- **Admin commands** — `!reload` to refresh knowledge base, `!factcheck` to trigger manual fact-check (admin-only)
 - **Auto-reload** — documents refresh from Google Drive every hour
 - **Session persistence** — WhatsApp session survives container restarts via Docker volume
+- **Proactive messaging** — bridge exposes `/send` endpoint for bot-initiated DMs (used by fact-check)
 
 ## Group message filtering
 
 The bot uses a two-step approach for group messages:
 
-1. **Relevance check** — a fast LLM call classifies whether the message is HOA-related (rules, complaints, procedures, contacts) or casual chat (greetings, jokes, personal topics)
+1. **Relevance check** — a fast LLM call classifies whether the message is HOA-related (rules, complaints, procedures, contacts) or casual chat (greetings, jokes, personal topics). The classifier also receives recent conversation history so follow-up questions are correctly recognized.
 2. **Response generation** — only if the message is relevant, the bot generates a full answer using the knowledge base
+3. **Value filter** — if the generated response indicates the bot doesn't know the answer, it stays silent in groups instead of posting unhelpful replies
 
 This prevents the bot from responding to every message in the group.
+
+## Daily fact-check
+
+The bot silently logs all group messages throughout the day. At 22:00 (via cron), it sends the full day's conversation along with SVJ documents to the LLM for fact-checking. If any member stated something factually incorrect about SVJ rules, the admin receives a DM with the findings. If everything is correct, a simple ✅ confirmation is sent.
+
+This can also be triggered manually with `!factcheck`.
 
 ## Setup
 
@@ -119,6 +132,7 @@ Add the bot's phone number to your WhatsApp group as a regular participant.
 
 ### Admin commands (via WhatsApp, admin number only)
 - `!reload` — immediately reload documents from Google Drive
+- `!factcheck` — run fact-check on today's group messages and receive results via DM
 
 ### Update documents
 1. Edit/add files in the **BOT_KNOWLEDGE** folder on Google Drive
@@ -151,6 +165,8 @@ ssh root@YOUR_VPS_IP "cd /opt/svj-bot && docker compose down whatsapp-bridge && 
 | `BUILDING_NAME` | SVJ name for the system prompt |
 | `ADMIN_PHONE` | Admin phone number without + (e.g., `420720994342`) |
 | `PYTHON_API_URL` | Python API URL (set in docker-compose.yml, default: `http://python-api:8080`) |
+| `BRIDGE_URL` | WhatsApp bridge URL for proactive messaging (default: `http://whatsapp-bridge:3000`) |
+| `BRIDGE_PORT` | Port for the bridge HTTP server (default: `3000`) |
 
 ## Security
 
@@ -159,7 +175,11 @@ ssh root@YOUR_VPS_IP "cd /opt/svj-bot && docker compose down whatsapp-bridge && 
 - **Document names** — never revealed; bot references documents generically ("as per the bylaws")
 - **Admin commands** — restricted to admin phone number only
 - **Group messages** — bot only responds to relevant HOA questions, ignores casual chat
-- **Firewall** — recommended: allow only SSH (port 22), no exposed web ports needed
+- **Rate limiting** — DMs capped at 10/hour per sender to prevent cost abuse
+- **fail2ban** — SSH brute-force protection enabled on VPS
+- **SSH hardened** — password authentication disabled, key-only access
+- **No exposed ports** — only SSH (22) is publicly accessible; API and bridge are localhost/Docker-internal only
+- **Finance blocking** — bot refuses to answer financial questions to prevent misinformation
 
 ## Cost Estimate
 
