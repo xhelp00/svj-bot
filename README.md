@@ -17,7 +17,7 @@ Since the primary use case is answering questions inside an existing HOA WhatsAp
 
 ## Architecture
 
-![Architecture](architecture-Architecture.svg)
+![Architecture](architecture.svg)
 
 Two services run on a single VPS via Docker Compose:
 - **whatsapp-bridge** (Node.js) — maintains a persistent WhatsApp Web session, receives messages, sends replies

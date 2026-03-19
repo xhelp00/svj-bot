@@ -27,6 +27,7 @@ jobs:
           transparent: true
           output: .
           action-mode: all
+          remove-page-suffix: true
 
       - name: Commit exported SVG
         run: |
