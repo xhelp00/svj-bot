@@ -7,11 +7,38 @@ const path = require("path");
 const PYTHON_API_URL =
   process.env.PYTHON_API_URL || "http://localhost:8080";
 
-// Whitelist of allowed group JIDs (comma-separated env var).
-// If empty, bot leaves any group it's added to.
-const ALLOWED_GROUP_IDS = process.env.ALLOWED_GROUP_IDS
-  ? process.env.ALLOWED_GROUP_IDS.split(",").map((s) => s.trim()).filter(Boolean)
-  : [];
+const ADMIN_PHONE = process.env.ADMIN_PHONE || "420720994342";
+
+// Whitelist of allowed group JIDs.
+// Loaded from: (1) env var ALLOWED_GROUP_IDS, (2) persistent file on volume
+const ALLOWED_GROUPS_FILE = "/app/.wwebjs_auth/allowed_groups.json";
+
+function loadAllowedGroups() {
+  const groups = new Set();
+  // From env var
+  if (process.env.ALLOWED_GROUP_IDS) {
+    process.env.ALLOWED_GROUP_IDS.split(",").map((s) => s.trim()).filter(Boolean)
+      .forEach((g) => groups.add(g));
+  }
+  // From persistent file
+  try {
+    const data = JSON.parse(fs.readFileSync(ALLOWED_GROUPS_FILE, "utf8"));
+    data.forEach((g) => groups.add(g));
+  } catch (e) {
+    // File doesn't exist yet — that's fine
+  }
+  return groups;
+}
+
+function saveAllowedGroups() {
+  try {
+    fs.writeFileSync(ALLOWED_GROUPS_FILE, JSON.stringify([...allowedGroups], null, 2));
+  } catch (e) {
+    console.error("Failed to save allowed groups:", e.message);
+  }
+}
+
+const allowedGroups = loadAllowedGroups();
 
 // Clean up stale Chromium lock files to prevent restart failures
 const AUTH_DIR = "/app/.wwebjs_auth";
@@ -83,7 +110,7 @@ client.on("group_join", async (notification) => {
     if (!botWasAdded) return;
 
     const groupId = notification.chatId;
-    if (ALLOWED_GROUP_IDS.length > 0 && !ALLOWED_GROUP_IDS.includes(groupId)) {
+    if (allowedGroups.size > 0 && !allowedGroups.has(groupId)) {
       console.warn(`[SECURITY] Bot added to unauthorized group ${groupId}, leaving...`);
       const chat = await notification.getChat();
       await chat.leave();
@@ -127,8 +154,18 @@ client.on("message", async (msg) => {
   const text = msg.body;
   if (!text || text.trim().length === 0) return;
 
+  // Admin command: !allowgroup — add current group to whitelist
+  if (isGroup && text.trim().toLowerCase() === "!allowgroup" && phoneNumber === ADMIN_PHONE) {
+    allowedGroups.add(chatId);
+    saveAllowedGroups();
+    const chat = await msg.getChat();
+    await chat.sendMessage(`✅ Skupina přidána na whitelist: ${chatId}`);
+    console.log(`[ADMIN] !allowgroup → added ${chatId}`);
+    return;
+  }
+
   // Block messages from unauthorized groups and auto-leave
-  if (isGroup && ALLOWED_GROUP_IDS.length > 0 && !ALLOWED_GROUP_IDS.includes(chatId)) {
+  if (isGroup && allowedGroups.size > 0 && !allowedGroups.has(chatId)) {
     console.warn(`[SECURITY] Message from unauthorized group ${chatId}, leaving...`);
     try {
       const chat = await msg.getChat();

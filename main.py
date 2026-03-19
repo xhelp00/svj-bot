@@ -179,7 +179,6 @@ async def handle_message(msg: MessageRequest):
                 return MessageResponse(
                     reply=f"Fact-check spuštěn pro {len(_daily_messages)} zpráv. Výsledek přijde v DM."
                 )
-
         # Reject messages from groups not in the whitelist (second line of defence;
         # the bridge should have already left such groups via group_join handler)
         if msg.is_group and ALLOWED_GROUP_IDS and msg.chat_id not in ALLOWED_GROUP_IDS:
