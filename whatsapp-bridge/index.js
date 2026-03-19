@@ -54,14 +54,21 @@ client.on("message", async (msg) => {
 
   const isGroup = msg.from.endsWith("@g.us");
   const sender = isGroup ? msg.author : msg.from;
-  const senderNumber = sender ? sender.replace("@c.us", "") : "";
+  const senderNumber = sender
+    ? sender.replace("@c.us", "").replace("@lid", "")
+    : "";
   const chatId = msg.from;
 
-  // Get sender name
+  // Get sender name and phone number
   let senderName = "";
+  let phoneNumber = senderNumber;
   try {
     const contact = await msg.getContact();
     senderName = contact.pushname || contact.name || "";
+    // Resolve LID to actual phone number
+    if (contact.number) {
+      phoneNumber = contact.number;
+    }
   } catch (e) {
     // ignore, name is optional
   }
@@ -70,7 +77,7 @@ client.on("message", async (msg) => {
   if (!text || text.trim().length === 0) return;
 
   console.log(
-    `[${isGroup ? "GROUP" : "DM"}] ${senderName} (${senderNumber}): ${text}`
+    `[${isGroup ? "GROUP" : "DM"}] ${senderName} (${phoneNumber}): ${text}`
   );
 
   try {
@@ -78,7 +85,7 @@ client.on("message", async (msg) => {
       `${PYTHON_API_URL}/message`,
       {
         text: text,
-        sender: senderNumber,
+        sender: phoneNumber,
         sender_name: senderName,
         is_group: isGroup,
         chat_id: chatId,
