@@ -55,31 +55,49 @@ Bot MÁ odpovědět když zpráva:
 - Ptá se na kontakty (správce, havárie, výbor)
 - Přímo oslovuje bota nebo žádá o pomoc/informaci ohledně SVJ
 - Je obecný dotaz relevantní pro bydlení v domě
+- Je navazující otázka na předchozí konverzaci s botem o SVJ tématu (např. "a co o víkendech?" po dotazu na pravidla hluku)
 
 Bot NEMÁ odpovědět když zpráva:
 - Je běžná konverzace mezi sousedy (pozdravy, smalltalk, vtipy)
 - Je osobní zpráva nesouvisející s SVJ (sport, počasí, politika)
-- Je odpověď na předchozí konverzaci mezi lidmi
+- Je odpověď na předchozí konverzaci mezi lidmi (ne s botem)
 - Je pouhý emoji, smích, souhlas ("ok", "díky", "👍")
 - Je nabídka/prodej osobních věcí
 - Týká se financí, poplatků, záloh, vyúčtování, dluhů, plateb nebo rozpočtu SVJ
-
+{context}
 Zpráva: "{message}"
 
 Odpověz POUZE jedním slovem: ANO nebo NE"""
 
 
-def should_respond(message: str) -> bool:
+def should_respond(message: str, history: list[dict] = None) -> bool:
     """
     Classify whether the bot should respond to a group message.
 
     Uses a cheap, fast LLM call to decide relevance.
+    Includes recent conversation history so follow-up questions are recognized.
     Returns True if the bot should respond.
     """
     model = _get_classifier_model()
 
+    # Build context from recent history (only if bot participated)
+    context = ""
+    if history:
+        # Only include history if the bot actually responded recently
+        bot_participated = any(e["role"] == "bot" for e in history)
+        if bot_participated:
+            context_lines = []
+            for entry in history[-4:]:  # last 4 entries max to keep it cheap
+                label = "Člen SVJ" if entry["role"] == "user" else "Bot"
+                context_lines.append(f"  {label}: {entry['text'][:100]}")
+            context = (
+                "\nPředchozí konverzace:\n"
+                + "\n".join(context_lines)
+                + "\n"
+            )
+
     try:
-        prompt = CLASSIFIER_PROMPT.format(message=message)
+        prompt = CLASSIFIER_PROMPT.format(message=message, context=context)
         response = model.generate_content(prompt)
         answer = response.text.strip().upper()
 

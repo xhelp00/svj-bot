@@ -136,13 +136,14 @@ async def handle_message(msg: MessageRequest):
 
         # For group messages, check if bot should respond
         if msg.is_group:
-            relevant = should_respond(msg.text)
+            history_key = _get_history_key(msg)
+            history = list(_conversation_history[history_key])
+            relevant = should_respond(msg.text, history=history)
             if not relevant:
                 logger.info(
                     f"Skipping group message from {msg.sender_name}: not relevant"
                 )
                 # Still store the message in history for context
-                history_key = _get_history_key(msg)
                 _conversation_history[history_key].append(
                     {"role": "user", "text": msg.text}
                 )
