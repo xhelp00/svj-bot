@@ -1,0 +1,22 @@
+services:
+  python-api:
+    build: .
+    ports:
+      - "127.0.0.1:8080:8080"
+    env_file: .env
+    volumes:
+      - ./service-account.json:/app/service-account.json:ro
+    restart: unless-stopped
+
+  whatsapp-bridge:
+    build: ./whatsapp-bridge
+    depends_on:
+      - python-api
+    environment:
+      - PYTHON_API_URL=http://python-api:8080
+    volumes:
+      - whatsapp_session:/app/.wwebjs_auth
+    restart: unless-stopped
+
+volumes:
+  whatsapp_session:
