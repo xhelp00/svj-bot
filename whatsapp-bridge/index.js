@@ -127,9 +127,16 @@ client.on("message", async (msg) => {
   const text = msg.body;
   if (!text || text.trim().length === 0) return;
 
-  // Block messages from unauthorized groups
+  // Block messages from unauthorized groups and auto-leave
   if (isGroup && ALLOWED_GROUP_IDS.length > 0 && !ALLOWED_GROUP_IDS.includes(chatId)) {
-    console.warn(`[SECURITY] Message from unauthorized group ${chatId}, ignoring`);
+    console.warn(`[SECURITY] Message from unauthorized group ${chatId}, leaving...`);
+    try {
+      const chat = await msg.getChat();
+      await chat.leave();
+      console.log(`[SECURITY] Left unauthorized group ${chatId}`);
+    } catch (e) {
+      console.error(`[SECURITY] Failed to leave group ${chatId}: ${e.message}`);
+    }
     return;
   }
 
