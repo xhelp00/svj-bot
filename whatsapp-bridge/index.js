@@ -5,6 +5,12 @@ const axios = require("axios");
 const PYTHON_API_URL =
   process.env.PYTHON_API_URL || "http://localhost:8080";
 
+// Whitelist of allowed group JIDs (comma-separated env var).
+// If empty, bot leaves any group it's added to.
+const ALLOWED_GROUP_IDS = process.env.ALLOWED_GROUP_IDS
+  ? process.env.ALLOWED_GROUP_IDS.split(",").map((s) => s.trim()).filter(Boolean)
+  : [];
+
 const client = new Client({
   authStrategy: new LocalAuth({ dataPath: "/app/.wwebjs_auth" }),
   puppeteer: {
@@ -43,6 +49,30 @@ client.on("disconnected", (reason) => {
   setTimeout(() => {
     client.initialize();
   }, 10000);
+});
+
+// Auto-leave groups that are not whitelisted
+client.on("group_join", async (notification) => {
+  try {
+    const botWid = client.info.wid._serialized;
+    const addedParticipants = notification.recipientIds || [];
+    const botWasAdded = addedParticipants.some(
+      (id) => id === botWid || id.replace("@c.us", "") === botWid.replace("@c.us", "")
+    );
+    if (!botWasAdded) return;
+
+    const groupId = notification.chatId;
+    if (ALLOWED_GROUP_IDS.length > 0 && !ALLOWED_GROUP_IDS.includes(groupId)) {
+      console.warn(`[SECURITY] Bot added to unauthorized group ${groupId}, leaving...`);
+      const chat = await notification.getChat();
+      await chat.leave();
+      console.log(`[SECURITY] Left unauthorized group ${groupId}`);
+    } else {
+      console.log(`[GROUP] Bot added to group ${groupId} (authorized)`);
+    }
+  } catch (err) {
+    console.error("Error in group_join handler:", err.message);
+  }
 });
 
 client.on("message", async (msg) => {

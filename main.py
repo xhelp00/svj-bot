@@ -28,6 +28,13 @@ app = FastAPI(title="SVJ Bot", version="2.0.0")
 BUILDING_NAME = os.environ.get("BUILDING_NAME", "SVJ")
 ADMIN_PHONE = os.environ.get("ADMIN_PHONE", "420720994342")
 
+# Whitelist of allowed group JIDs. If empty, bot responds in any group.
+# Format: comma-separated list of WhatsApp group JIDs (e.g. "123456789-987654321@g.us")
+_allowed_groups_raw = os.environ.get("ALLOWED_GROUP_IDS", "")
+ALLOWED_GROUP_IDS: set[str] = {
+    g.strip() for g in _allowed_groups_raw.split(",") if g.strip()
+}
+
 # --- Conversation history (last 5 messages per chat) ---
 MAX_HISTORY = 5
 # Key: chat_id (group) or sender (DM) → deque of {"role": "user"/"bot", "text": str}
@@ -172,6 +179,14 @@ async def handle_message(msg: MessageRequest):
                 return MessageResponse(
                     reply=f"Fact-check spuštěn pro {len(_daily_messages)} zpráv. Výsledek přijde v DM."
                 )
+
+        # Reject messages from groups not in the whitelist (second line of defence;
+        # the bridge should have already left such groups via group_join handler)
+        if msg.is_group and ALLOWED_GROUP_IDS and msg.chat_id not in ALLOWED_GROUP_IDS:
+            logger.warning(
+                f"Message from unauthorized group {msg.chat_id}, ignoring"
+            )
+            return MessageResponse(reply=None)
 
         # Rate limiting for DMs only
         if not msg.is_group and _is_rate_limited(msg.sender):
