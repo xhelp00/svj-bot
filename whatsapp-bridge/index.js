@@ -79,11 +79,15 @@ client.on("qr", (qr) => {
   qrcode.generate(qr, { small: true });
 });
 
+let presenceInterval = null;
+
 client.on("ready", () => {
   console.log("WhatsApp Web client is ready!");
+  // Clear any previous interval to prevent stacking after reconnects
+  if (presenceInterval) clearInterval(presenceInterval);
   // Periodically signal "online" presence to appear human-like
   client.sendPresenceAvailable();
-  setInterval(() => {
+  presenceInterval = setInterval(() => {
     try { client.sendPresenceAvailable(); } catch (e) { /* ignore */ }
   }, 5 * 60 * 1000); // every 5 minutes
   // Reset reconnect counter on successful connection
@@ -97,8 +101,15 @@ client.on("authenticated", () => {
   console.log("WhatsApp Web client authenticated.");
 });
 
-client.on("auth_failure", (msg) => {
+client.on("auth_failure", async (msg) => {
   console.error("Authentication failed:", msg);
+  console.log("[AUTH] Clearing session data and restarting...");
+  try {
+    // Delete session to force fresh QR on next start
+    fs.rmSync(path.join(AUTH_DIR, "session"), { recursive: true, force: true });
+  } catch (e) { /* ignore */ }
+  // Let Docker restart policy handle the restart
+  process.exit(1);
 });
 
 let reconnectAttempt = 0;
