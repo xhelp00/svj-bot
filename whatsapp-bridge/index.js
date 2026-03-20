@@ -120,8 +120,8 @@ client.on("disconnected", (reason) => {
   console.error("WhatsApp Web client disconnected:", reason);
   reconnectAttempt++;
   if (reconnectAttempt > MAX_RECONNECT_ATTEMPTS) {
-    console.error(`[RECONNECT] Giving up after ${MAX_RECONNECT_ATTEMPTS} attempts. Manual restart required.`);
-    return;
+    console.error(`[RECONNECT] Giving up after ${MAX_RECONNECT_ATTEMPTS} attempts. Exiting for Docker restart.`);
+    process.exit(1);
   }
   const delayIdx = Math.min(reconnectAttempt - 1, RECONNECT_DELAYS.length - 1);
   const delaySec = RECONNECT_DELAYS[delayIdx];
