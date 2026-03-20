@@ -176,12 +176,17 @@ client.on("message", async (msg) => {
 
     const reply = response.data.reply;
     if (reply) {
-      // Random delay (3-12s) to appear human-like
-      const delay = 3000 + Math.random() * 9000;
-      await new Promise((r) => setTimeout(r, delay));
       const chat = await msg.getChat();
+      // Simulate reading (1-3s), then typing indicator, then send
+      const readDelay = 1000 + Math.random() * 2000;
+      await new Promise((r) => setTimeout(r, readDelay));
+      await chat.sendStateTyping();
+      // Typing duration based on reply length (50-80ms per char, min 2s, max 10s)
+      const typeDelay = Math.min(10000, Math.max(2000, reply.length * (50 + Math.random() * 30)));
+      await new Promise((r) => setTimeout(r, typeDelay));
       await chat.sendMessage(reply);
-      console.log(`[REPLY] (${(delay/1000).toFixed(1)}s delay) → ${reply.substring(0, 80)}...`);
+      const totalDelay = (readDelay + typeDelay) / 1000;
+      console.log(`[REPLY] (${totalDelay.toFixed(1)}s delay) → ${reply.substring(0, 80)}...`);
     }
   } catch (error) {
     console.error(
