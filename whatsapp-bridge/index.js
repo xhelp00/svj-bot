@@ -86,6 +86,11 @@ client.on("ready", () => {
   setInterval(() => {
     try { client.sendPresenceAvailable(); } catch (e) { /* ignore */ }
   }, 5 * 60 * 1000); // every 5 minutes
+  // Reset reconnect counter on successful connection
+  if (reconnectAttempt > 0) {
+    console.log(`[RECONNECT] Recovered after ${reconnectAttempt} attempt(s)`);
+    reconnectAttempt = 0;
+  }
 });
 
 client.on("authenticated", () => {
@@ -96,13 +101,25 @@ client.on("auth_failure", (msg) => {
   console.error("Authentication failed:", msg);
 });
 
+let reconnectAttempt = 0;
+const MAX_RECONNECT_ATTEMPTS = 10;
+const RECONNECT_DELAYS = [60, 120, 300, 600, 1800]; // seconds: 1min, 2min, 5min, 10min, 30min
+
 client.on("disconnected", (reason) => {
   console.error("WhatsApp Web client disconnected:", reason);
-  console.log("Attempting to reconnect in 60 seconds...");
+  reconnectAttempt++;
+  if (reconnectAttempt > MAX_RECONNECT_ATTEMPTS) {
+    console.error(`[RECONNECT] Giving up after ${MAX_RECONNECT_ATTEMPTS} attempts. Manual restart required.`);
+    return;
+  }
+  const delayIdx = Math.min(reconnectAttempt - 1, RECONNECT_DELAYS.length - 1);
+  const delaySec = RECONNECT_DELAYS[delayIdx];
+  console.log(`[RECONNECT] Attempt ${reconnectAttempt}/${MAX_RECONNECT_ATTEMPTS} in ${delaySec}s...`);
   setTimeout(() => {
     client.initialize();
-  }, 60000);
+  }, delaySec * 1000);
 });
+
 
 // Log when bot is added to a group (no auto-leave to avoid WhatsApp restrictions)
 client.on("group_join", async (notification) => {
