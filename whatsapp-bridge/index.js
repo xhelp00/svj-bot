@@ -102,7 +102,7 @@ client.on("auth_failure", (msg) => {
 });
 
 let reconnectAttempt = 0;
-const MAX_RECONNECT_ATTEMPTS = 10;
+const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAYS = [60, 120, 300, 600, 1800]; // seconds: 1min, 2min, 5min, 10min, 30min
 
 client.on("disconnected", (reason) => {
