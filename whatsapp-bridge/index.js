@@ -81,6 +81,11 @@ client.on("qr", (qr) => {
 
 client.on("ready", () => {
   console.log("WhatsApp Web client is ready!");
+  // Periodically signal "online" presence to appear human-like
+  client.sendPresenceAvailable();
+  setInterval(() => {
+    try { client.sendPresenceAvailable(); } catch (e) { /* ignore */ }
+  }, 5 * 60 * 1000); // every 5 minutes
 });
 
 client.on("authenticated", () => {
@@ -177,7 +182,8 @@ client.on("message", async (msg) => {
     const reply = response.data.reply;
     if (reply) {
       const chat = await msg.getChat();
-      // Simulate reading (1-3s), then typing indicator, then send
+      // Mark as read, then simulate reading (1-3s), then typing indicator
+      await chat.sendSeen();
       const readDelay = 1000 + Math.random() * 2000;
       await new Promise((r) => setTimeout(r, readDelay));
       await chat.sendStateTyping();
@@ -207,8 +213,13 @@ expressApp.post("/send", async (req, res) => {
     return res.status(400).json({ error: "Missing 'to' or 'text'" });
   }
   try {
+    // Simulate typing before proactive message
+    const chat = await client.getChatById(to);
+    await chat.sendStateTyping();
+    const delay = 2000 + Math.random() * 3000;
+    await new Promise((r) => setTimeout(r, delay));
     await client.sendMessage(to, text);
-    console.log(`[SEND] → ${to}: ${text.substring(0, 80)}...`);
+    console.log(`[SEND] (${(delay/1000).toFixed(1)}s delay) → ${to}: ${text.substring(0, 80)}...`);
     res.json({ status: "sent" });
   } catch (error) {
     console.error("Error sending message:", error.message);
