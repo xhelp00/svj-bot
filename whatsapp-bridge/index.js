@@ -176,9 +176,12 @@ client.on("message", async (msg) => {
 
     const reply = response.data.reply;
     if (reply) {
+      // Random delay (3-12s) to appear human-like
+      const delay = 3000 + Math.random() * 9000;
+      await new Promise((r) => setTimeout(r, delay));
       const chat = await msg.getChat();
       await chat.sendMessage(reply);
-      console.log(`[REPLY] → ${reply.substring(0, 80)}...`);
+      console.log(`[REPLY] (${(delay/1000).toFixed(1)}s delay) → ${reply.substring(0, 80)}...`);
     }
   } catch (error) {
     console.error(
