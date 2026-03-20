@@ -21,7 +21,7 @@ def _get_model():
         _model = genai.GenerativeModel(
             model_name="gemini-2.5-flash-lite",
             generation_config=genai.GenerationConfig(
-                temperature=0.3,
+                temperature=0.6,
                 max_output_tokens=1024,
             ),
         )
