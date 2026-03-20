@@ -163,6 +163,14 @@ client.on("message", async (msg) => {
   const text = msg.body;
   if (!text || text.trim().length === 0) return;
 
+  // Mark all messages as read (humans read everything, not just what they reply to)
+  try {
+    const chat = await msg.getChat();
+    // Small random delay before reading (0.5-2s) — humans don't read instantly
+    await new Promise((r) => setTimeout(r, 500 + Math.random() * 1500));
+    await chat.sendSeen();
+  } catch (e) { /* ignore */ }
+
   // Admin command: !allowgroup — add current group to whitelist
   if (isGroup && text.trim().toLowerCase() === "!allowgroup" && phoneNumber === ADMIN_PHONE) {
     allowedGroups.add(chatId);
@@ -171,6 +179,15 @@ client.on("message", async (msg) => {
     await chat.sendMessage(`✅ Skupina přidána na whitelist: ${chatId}`);
     console.log(`[ADMIN] !allowgroup → added ${chatId}`);
     return;
+  }
+
+  // Don't respond in groups at night (23:00-06:00 CET) — humans sleep
+  // DMs are always answered; groups only during daytime
+  if (isGroup) {
+    const hour = new Date().toLocaleString("en-US", { timeZone: "Europe/Prague", hour12: false, hour: "numeric" });
+    if (parseInt(hour) >= 23 || parseInt(hour) < 6) {
+      return;
+    }
   }
 
   // Silently ignore messages from unauthorized groups (no auto-leave)
@@ -199,8 +216,7 @@ client.on("message", async (msg) => {
     const reply = response.data.reply;
     if (reply) {
       const chat = await msg.getChat();
-      // Mark as read, then simulate reading (1-3s), then typing indicator
-      await chat.sendSeen();
+      // Simulate reading (1-3s), then typing indicator (sendSeen already called above)
       const readDelay = 1000 + Math.random() * 2000;
       await new Promise((r) => setTimeout(r, readDelay));
       await chat.sendStateTyping();
