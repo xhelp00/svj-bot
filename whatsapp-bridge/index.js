@@ -93,33 +93,20 @@ client.on("auth_failure", (msg) => {
 
 client.on("disconnected", (reason) => {
   console.error("WhatsApp Web client disconnected:", reason);
-  console.log("Attempting to reconnect in 10 seconds...");
+  console.log("Attempting to reconnect in 60 seconds...");
   setTimeout(() => {
     client.initialize();
-  }, 10000);
+  }, 60000);
 });
 
-// Auto-leave groups that are not whitelisted
+// Log when bot is added to a group (no auto-leave to avoid WhatsApp restrictions)
 client.on("group_join", async (notification) => {
   try {
-    const botWid = client.info.wid._serialized;
-    const addedParticipants = notification.recipientIds || [];
-    const botWasAdded = addedParticipants.some(
-      (id) => id === botWid || id.replace("@c.us", "") === botWid.replace("@c.us", "")
-    );
-    if (!botWasAdded) return;
-
     const groupId = notification.chatId;
-    if (allowedGroups.size > 0 && !allowedGroups.has(groupId)) {
-      console.warn(`[SECURITY] Bot added to unauthorized group ${groupId}, leaving...`);
-      const chat = await notification.getChat();
-      await chat.leave();
-      console.log(`[SECURITY] Left unauthorized group ${groupId}`);
-    } else {
-      console.log(`[GROUP] Bot added to group ${groupId} (authorized)`);
-    }
+    const isAllowed = allowedGroups.size === 0 || allowedGroups.has(groupId);
+    console.log(`[GROUP] Bot added to group ${groupId} (${isAllowed ? "authorized" : "NOT authorized — ignoring messages"})`);
   } catch (err) {
-    console.error("Error in group_join handler:", err.message);
+    // ignore
   }
 });
 
@@ -164,16 +151,9 @@ client.on("message", async (msg) => {
     return;
   }
 
-  // Block messages from unauthorized groups and auto-leave
+  // Silently ignore messages from unauthorized groups (no auto-leave)
   if (isGroup && allowedGroups.size > 0 && !allowedGroups.has(chatId)) {
-    console.warn(`[SECURITY] Message from unauthorized group ${chatId}, leaving...`);
-    try {
-      const chat = await msg.getChat();
-      await chat.leave();
-      console.log(`[SECURITY] Left unauthorized group ${chatId}`);
-    } catch (e) {
-      console.error(`[SECURITY] Failed to leave group ${chatId}: ${e.message}`);
-    }
+    console.log(`[SECURITY] Ignoring message from unauthorized group ${chatId}`);
     return;
   }
 
