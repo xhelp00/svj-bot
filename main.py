@@ -28,6 +28,10 @@ app = FastAPI(title="SVJ Bot", version="2.0.0")
 BUILDING_NAME = os.environ.get("BUILDING_NAME", "SVJ")
 ADMIN_PHONE = os.environ.get("ADMIN_PHONE", "420720994342")
 
+# Blocklist of sender numbers the bot should never respond to
+_blocked_raw = os.environ.get("BLOCKED_SENDERS", "0,status")
+BLOCKED_SENDERS: set[str] = {s.strip() for s in _blocked_raw.split(",") if s.strip()}
+
 # Whitelist of allowed group JIDs. If empty, bot responds in any group.
 # Format: comma-separated list of WhatsApp group JIDs (e.g. "123456789-987654321@g.us")
 _allowed_groups_raw = os.environ.get("ALLOWED_GROUP_IDS", "")
@@ -167,6 +171,11 @@ async def handle_message(msg: MessageRequest):
         f"Message from {msg.sender_name} ({msg.sender}) via {source}: "
         f"{msg.text[:100]}"
     )
+
+    # Ignore blocked senders (WhatsApp system accounts, support, etc.)
+    if msg.sender in BLOCKED_SENDERS:
+        logger.info(f"Ignoring blocked sender: {msg.sender}")
+        return MessageResponse(reply=None)
 
     try:
         # Admin commands
