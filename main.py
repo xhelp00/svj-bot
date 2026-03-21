@@ -82,6 +82,8 @@ RATE_LIMIT_MAX = 10  # max messages per window
 RATE_LIMIT_WINDOW = 3600  # 1 hour in seconds
 # Key: sender → list of timestamps
 _rate_timestamps: dict[str, list[float]] = defaultdict(list)
+# Track whether rate limit message was already sent to avoid spam
+_rate_limit_notified: dict[str, bool] = {}
 
 
 def _is_rate_limited(sender: str) -> bool:
@@ -93,6 +95,8 @@ def _is_rate_limited(sender: str) -> bool:
     ]
     if len(_rate_timestamps[sender]) >= RATE_LIMIT_MAX:
         return True
+    # Reset notification flag when under limit
+    _rate_limit_notified.pop(sender, None)
     _rate_timestamps[sender].append(now)
     return False
 
@@ -189,10 +193,14 @@ async def handle_message(msg: MessageRequest):
 
         # Rate limiting for DMs only
         if not msg.is_group and _is_rate_limited(msg.sender):
-            logger.warning(f"Rate limited: {msg.sender_name} ({msg.sender})")
-            return MessageResponse(
-                reply="Překročili jste limit zpráv (10 za hodinu). Zkuste to prosím později."
-            )
+            if not _rate_limit_notified.get(msg.sender):
+                _rate_limit_notified[msg.sender] = True
+                logger.warning(f"Rate limited: {msg.sender_name} ({msg.sender})")
+                return MessageResponse(
+                    reply="Překročili jste limit zpráv (10 za hodinu). Zkuste to prosím později."
+                )
+            logger.warning(f"Rate limited (silent): {msg.sender_name} ({msg.sender})")
+            return MessageResponse(reply=None)
 
         # Log all group messages for daily fact-checking
         if msg.is_group:
