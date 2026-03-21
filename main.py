@@ -29,7 +29,7 @@ BUILDING_NAME = os.environ.get("BUILDING_NAME", "SVJ")
 ADMIN_PHONE = os.environ.get("ADMIN_PHONE", "420720994342")
 
 # Blocklist of sender numbers the bot should never respond to
-_blocked_raw = os.environ.get("BLOCKED_SENDERS", "0,status")
+_blocked_raw = os.environ.get("BLOCKED_SENDERS", "0,status,15517868411")
 BLOCKED_SENDERS: set[str] = {s.strip() for s in _blocked_raw.split(",") if s.strip()}
 
 # Whitelist of allowed group JIDs. If empty, bot responds in any group.
