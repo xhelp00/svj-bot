@@ -21,5 +21,13 @@ services:
       - whatsapp_session:/app/.wwebjs_auth
     restart: unless-stopped
 
+  dozzle:
+    image: amir20/dozzle:latest
+    ports:
+      - "127.0.0.1:9090:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+
 volumes:
   whatsapp_session:
