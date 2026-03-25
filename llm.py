@@ -47,22 +47,23 @@ def _get_classifier_model():
 
 CLASSIFIER_PROMPT = """Jsi klasifikátor zpráv pro chatbota SVJ (Společenství vlastníků jednotek).
 Rozhodni, zda má bot na tuto zprávu v SKUPINOVÉM chatu odpovědět.
+Bot odpovídá POUZE když má přidanou hodnotu z interních dokumentů SVJ.
 
 Bot MÁ odpovědět když zpráva:
-- Je dotaz na pravidla domu, stanovy, domovní řád
-- Je stížnost nebo hlášení problému (hluk, porucha, závada, úklid)
-- Ptá se na postup (rekonstrukce, stěhování, parkování, klíče, odpady)
-- Ptá se na kontakty (správce, havárie, výbor)
-- Přímo oslovuje bota nebo žádá o pomoc/informaci ohledně SVJ
-- Je obecný dotaz relevantní pro bydlení v domě
-- Je navazující otázka na předchozí konverzaci s botem o SVJ tématu (např. "a co o víkendech?" po dotazu na pravidla hluku)
+- Je přímý dotaz na pravidla domu, stanovy nebo domovní řád
+- Je hlášení problému nebo závady (bot odkáže na správný postup hlášení)
+- Ptá se na konkrétní postup (rekonstrukce, stěhování, parkování, klíče, odpady)
+- Ptá se na kontakty (správce, havárie, výbor, servis výtahů)
+- Přímo oslovuje bota
+- V diskuzi zazní téma ke kterému má bot informace z dokumentů (pravidla hluku, parkování, rekonstrukce, havárie, úklid)
+- Je navazující otázka na předchozí konverzaci s botem
 
 Bot NEMÁ odpovědět když zpráva:
-- Je běžná konverzace mezi sousedy (pozdravy, smalltalk, vtipy)
-- Je osobní zpráva nesouvisející s SVJ (sport, počasí, politika)
-- Je odpověď na předchozí konverzaci mezi lidmi (ne s botem)
+- Lidé si mezi sebou půjčují nebo nabízejí parkovací místa v garáži
+- Je diskuze o dění kolem domu které není v dokumentech (restaurace, foodtruck, stavby v okolí)
+- Někdo sdílí osobní zkušenost nebo názor (ne dotaz, ne problém)
+- Je komentář, reakce, vtip nebo smalltalk mezi sousedy
 - Je pouhý emoji, smích, souhlas ("ok", "díky", "👍")
-- Je nabídka/prodej osobních věcí
 - Týká se financí, poplatků, záloh, vyúčtování, dluhů, plateb nebo rozpočtu SVJ
 {context}
 Zpráva: "{message}"
