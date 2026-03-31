@@ -33,7 +33,7 @@ The Node.js bridge forwards messages to the Python API over localhost. The Pytho
 | `llm.py` | Gemini LLM integration + relevance classifier for group messages |
 | `knowledge_base.py` | System prompt builder from loaded documents |
 | `drive_loader.py` | PDF and DOCX document loader from Google Drive |
-| `secret_manager.py` | Secret retrieval (env vars on VPS) |
+| `secret_manager.py` | Secret retrieval (env vars, with GCP Secret Manager fallback) |
 | `Dockerfile` | Python service container |
 | `docker-compose.yml` | Orchestrates both services |
 | `whatsapp-bridge/index.js` | WhatsApp Web client (Node.js) |
@@ -52,9 +52,15 @@ The Node.js bridge forwards messages to the Python API over localhost. The Pytho
 - **Rate limiting** — DMs limited to 10 messages/hour per sender to prevent abuse
 - **Admin commands** — `!reload` to refresh knowledge base, `!factcheck` to trigger manual fact-check (admin-only)
 - **Auto-reload** — documents refresh from Google Drive every hour
-- **Group whitelist** — bot only operates in explicitly allowed groups; auto-leaves any unauthorized group immediately
+- **Group whitelist** — bot only operates in explicitly allowed groups; silently ignores messages from unauthorized groups
+- **Human-like behavior** — typing indicators, read receipts (`sendSeen`), variable response delays, presence signaling — reduces WhatsApp detection risk
+- **Quiet hours** — bot does not respond in groups between 23:00–06:00 CET
+- **Exponential backoff reconnect** — on disconnect, retries with increasing delays (60s→1800s), max 5 attempts before exiting for Docker restart
+- **Persistent group whitelist** — allowed groups stored in JSON file on Docker volume; `!allowgroup` admin command adds groups at runtime
 - **Session persistence** — WhatsApp session survives container restarts via Docker volume
 - **Proactive messaging** — bridge exposes `/send` endpoint for bot-initiated DMs (used by fact-check)
+- **Sender blocklist** — specific phone numbers can be blocked from triggering any bot response
+- **Dozzle** — lightweight Docker log viewer accessible via SSH tunnel (port 9090)
 
 ## Group message filtering
 
@@ -130,6 +136,7 @@ Add the bot's phone number to your WhatsApp group as a regular participant.
 ### Admin commands (via WhatsApp, admin number only)
 - `!reload` — immediately reload documents from Google Drive
 - `!factcheck` — run fact-check on today's group messages and receive results via DM
+- `!allowgroup` — (send in a group) permanently adds that group to the whitelist
 
 ### Update documents
 1. Edit/add files in the **BOT_KNOWLEDGE** folder on Google Drive
@@ -137,8 +144,16 @@ Add the bot's phone number to your WhatsApp group as a regular participant.
 3. Send `!reload` via WhatsApp, or wait up to 1 hour for auto-reload
 
 ### Check logs
+
+**Terminal:**
 ```bash
 ssh root@YOUR_VPS_IP "cd /opt/svj-bot && docker compose logs -f --tail=50"
+```
+
+**Dozzle (web UI):**
+```bash
+ssh -L 9090:localhost:9090 root@YOUR_VPS_IP
+# Then open http://localhost:9090 in your browser
 ```
 
 ### Restart services
@@ -164,7 +179,7 @@ ssh root@YOUR_VPS_IP "cd /opt/svj-bot && docker compose down whatsapp-bridge && 
 | `PYTHON_API_URL` | Python API URL (set in docker-compose.yml, default: `http://python-api:8080`) |
 | `BRIDGE_URL` | WhatsApp bridge URL for proactive messaging (default: `http://whatsapp-bridge:3000`) |
 | `BRIDGE_PORT` | Port for the bridge HTTP server (default: `3000`) |
-| `ALLOWED_GROUP_IDS` | Comma-separated whitelist of WhatsApp group JIDs (e.g., `120363406060112788@g.us`). If set, bot auto-leaves any other group. |
+| `ALLOWED_GROUP_IDS` | Comma-separated whitelist of WhatsApp group JIDs (e.g., `120363406060112788@g.us`). Bot ignores messages from unlisted groups. Also merged with persistent whitelist on disk. |
 
 ## Security
 
@@ -176,7 +191,7 @@ ssh root@YOUR_VPS_IP "cd /opt/svj-bot && docker compose down whatsapp-bridge && 
 - **Rate limiting** — DMs capped at 10/hour per sender to prevent cost abuse
 - **fail2ban** — SSH brute-force protection enabled on VPS
 - **SSH hardened** — password authentication disabled, key-only access
-- **Group whitelist** — bot only responds in allowed groups (`ALLOWED_GROUP_IDS`); auto-leaves unauthorized groups on first message
+- **Group whitelist** — bot only responds in allowed groups; silently ignores unauthorized groups
 - **No exposed ports** — only SSH (22) is publicly accessible; API and bridge are localhost/Docker-internal only
 - **Finance blocking** — bot refuses to answer financial questions to prevent misinformation
 
