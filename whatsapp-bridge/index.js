@@ -226,27 +226,34 @@ client.on("message", async (msg) => {
 
     const reply = response.data.reply;
     if (reply) {
-      const chat = await msg.getChat();
-      // Simulate reading (1-3s), then typing indicator (sendSeen already called above)
-      const readDelay = 1000 + Math.random() * 2000;
-      await new Promise((r) => setTimeout(r, readDelay));
-      await chat.sendStateTyping();
-      // Typing duration based on reply length (50-80ms per char, min 2s, max 10s)
-      const typeDelay = Math.min(10000, Math.max(2000, reply.length * (50 + Math.random() * 30)));
-      await new Promise((r) => setTimeout(r, typeDelay));
+      let stage = "getChat";
       try {
-        await msg.reply(reply);
-      } catch (replyErr) {
-        await chat.sendMessage(reply);
+        const chat = await msg.getChat();
+        // Simulate reading (1-3s), then typing indicator (sendSeen already called above)
+        const readDelay = 1000 + Math.random() * 2000;
+        await new Promise((r) => setTimeout(r, readDelay));
+        stage = "sendStateTyping";
+        await chat.sendStateTyping();
+        // Typing duration based on reply length (50-80ms per char, min 2s, max 10s)
+        const typeDelay = Math.min(10000, Math.max(2000, reply.length * (50 + Math.random() * 30)));
+        await new Promise((r) => setTimeout(r, typeDelay));
+        stage = "msg.reply";
+        try {
+          await msg.reply(reply);
+        } catch (replyErr) {
+          console.warn(`[SEND] msg.reply failed (${replyErr.message}), falling back to sendMessage`);
+          stage = "chat.sendMessage";
+          await chat.sendMessage(reply);
+        }
+        const totalDelay = (readDelay + typeDelay) / 1000;
+        console.log(`[REPLY] (${totalDelay.toFixed(1)}s delay) → ${reply.substring(0, 80)}...`);
+      } catch (sendErr) {
+        console.error(`[SEND] Failed at stage '${stage}':`, sendErr.message);
+        console.error(sendErr.stack);
       }
-      const totalDelay = (readDelay + typeDelay) / 1000;
-      console.log(`[REPLY] (${totalDelay.toFixed(1)}s delay) → ${reply.substring(0, 80)}...`);
     }
   } catch (error) {
-    console.error(
-      "Error communicating with Python API:",
-      error.message
-    );
+    console.error("Error communicating with Python API:", error.message);
   }
 });
 
