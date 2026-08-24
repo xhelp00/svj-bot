@@ -143,6 +143,16 @@ client.on("group_join", async (notification) => {
   }
 });
 
+// Send the "typing..." indicator without needing a Chat object.
+// Mirrors Chat.sendStateTyping(), which is unusable when getChat() fails on @lid chats.
+async function sendTyping(chatId) {
+  try {
+    await client.pupPage.evaluate((id) => {
+      window.WWebJS.sendChatstate("typing", id);
+    }, chatId);
+  } catch (e) { /* cosmetic only — never block the reply */ }
+}
+
 client.on("message", async (msg) => {
   // Ignore own messages
   if (msg.fromMe) return;
@@ -175,19 +185,18 @@ client.on("message", async (msg) => {
   if (!text || text.trim().length === 0) return;
 
   // Mark all messages as read (humans read everything, not just what they reply to)
+  // Uses client.sendSeen(chatId) — msg.getChat() fails on @lid chats
   try {
-    const chat = await msg.getChat();
     // Small random delay before reading (0.5-2s) — humans don't read instantly
     await new Promise((r) => setTimeout(r, 500 + Math.random() * 1500));
-    await chat.sendSeen();
+    await client.sendSeen(chatId);
   } catch (e) { /* ignore */ }
 
   // Admin command: !allowgroup — add current group to whitelist
   if (isGroup && text.trim().toLowerCase() === "!allowgroup" && phoneNumber === ADMIN_PHONE) {
     allowedGroups.add(chatId);
     saveAllowedGroups();
-    const chat = await msg.getChat();
-    await chat.sendMessage(`✅ Skupina přidána na whitelist: ${chatId}`);
+    await client.sendMessage(chatId, `✅ Skupina přidána na whitelist: ${chatId}`);
     console.log(`[ADMIN] !allowgroup → added ${chatId}`);
     return;
   }
@@ -226,34 +235,26 @@ client.on("message", async (msg) => {
 
     const reply = response.data.reply;
     if (reply) {
-      let stage = "getChat";
+      // Simulate reading (1-3s), then typing indicator
+      const readDelay = 1000 + Math.random() * 2000;
+      await new Promise((r) => setTimeout(r, readDelay));
+      await sendTyping(chatId);
+      // Typing duration based on reply length (50-80ms per char, min 2s, max 10s)
+      const typeDelay = Math.min(10000, Math.max(2000, reply.length * (50 + Math.random() * 30)));
+      await new Promise((r) => setTimeout(r, typeDelay));
       try {
-        const chat = await msg.getChat();
-        // Simulate reading (1-3s), then typing indicator (sendSeen already called above)
-        const readDelay = 1000 + Math.random() * 2000;
-        await new Promise((r) => setTimeout(r, readDelay));
-        stage = "sendStateTyping";
-        await chat.sendStateTyping();
-        // Typing duration based on reply length (50-80ms per char, min 2s, max 10s)
-        const typeDelay = Math.min(10000, Math.max(2000, reply.length * (50 + Math.random() * 30)));
-        await new Promise((r) => setTimeout(r, typeDelay));
-        stage = "msg.reply";
-        try {
-          await msg.reply(reply);
-        } catch (replyErr) {
-          console.warn(`[SEND] msg.reply failed (${replyErr.message}), falling back to sendMessage`);
-          stage = "chat.sendMessage";
-          await chat.sendMessage(reply);
-        }
-        const totalDelay = (readDelay + typeDelay) / 1000;
-        console.log(`[REPLY] (${totalDelay.toFixed(1)}s delay) → ${reply.substring(0, 80)}...`);
-      } catch (sendErr) {
-        console.error(`[SEND] Failed at stage '${stage}':`, sendErr.message);
-        console.error(sendErr.stack);
+        // Quoted reply; falls back to a plain message if quoting fails
+        await msg.reply(reply);
+      } catch (replyErr) {
+        console.warn(`[SEND] msg.reply failed (${replyErr.message}), sending unquoted`);
+        await client.sendMessage(chatId, reply);
       }
+      const totalDelay = (readDelay + typeDelay) / 1000;
+      console.log(`[REPLY] (${totalDelay.toFixed(1)}s delay) → ${reply.substring(0, 80)}...`);
     }
   } catch (error) {
-    console.error("Error communicating with Python API:", error.message);
+    console.error("[SEND] Failed:", error.message);
+    if (error.stack) console.error(error.stack);
   }
 });
 
@@ -269,8 +270,7 @@ expressApp.post("/send", async (req, res) => {
   }
   try {
     // Simulate typing before proactive message
-    const chat = await client.getChatById(to);
-    await chat.sendStateTyping();
+    await sendTyping(to);
     const delay = 2000 + Math.random() * 3000;
     await new Promise((r) => setTimeout(r, delay));
     await client.sendMessage(to, text);
