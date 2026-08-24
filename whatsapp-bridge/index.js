@@ -234,7 +234,11 @@ client.on("message", async (msg) => {
       // Typing duration based on reply length (50-80ms per char, min 2s, max 10s)
       const typeDelay = Math.min(10000, Math.max(2000, reply.length * (50 + Math.random() * 30)));
       await new Promise((r) => setTimeout(r, typeDelay));
-      await msg.reply(reply);
+      try {
+        await msg.reply(reply);
+      } catch (replyErr) {
+        await chat.sendMessage(reply);
+      }
       const totalDelay = (readDelay + typeDelay) / 1000;
       console.log(`[REPLY] (${totalDelay.toFixed(1)}s delay) → ${reply.substring(0, 80)}...`);
     }
