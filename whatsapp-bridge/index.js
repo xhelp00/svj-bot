@@ -143,6 +143,25 @@ client.on("group_join", async (notification) => {
   }
 });
 
+// LID -> phone number, cached: the mapping is stable, so resolve each sender once.
+const lidPhoneCache = new Map();
+
+async function resolveLidToPhone(lid) {
+  if (lidPhoneCache.has(lid)) return lidPhoneCache.get(lid);
+  let phone = null;
+  try {
+    const [mapping] = await client.getContactLidAndPhone([lid]);
+    if (mapping && mapping.pn) {
+      phone = mapping.pn.replace("@c.us", "");
+    }
+  } catch (e) {
+    console.warn(`[LID] Could not resolve ${lid}: ${e.message}`);
+  }
+  lidPhoneCache.set(lid, phone);
+  console.log(`[LID] ${lid} → ${phone || "unresolved"}`);
+  return phone;
+}
+
 // Send the "typing..." indicator without needing a Chat object.
 // Mirrors Chat.sendStateTyping(), which is unusable when getChat() fails on @lid chats.
 async function sendTyping(chatId) {
@@ -179,6 +198,14 @@ client.on("message", async (msg) => {
     }
   } catch (e) {
     // ignore, name is optional
+  }
+
+  // WhatsApp now addresses contacts by LID, and contact.number is empty for
+  // those, so ask the store to map the LID back to the real phone number.
+  // Admin checks (here and in the Python API) compare against that number.
+  if (sender && sender.endsWith("@lid")) {
+    const resolved = await resolveLidToPhone(sender);
+    if (resolved) phoneNumber = resolved;
   }
 
   const text = msg.body;
