@@ -46,12 +46,12 @@ The Node.js bridge forwards messages to the Python API over localhost. The Pytho
 - **Knowledge-based answers** — answers only from uploaded documents
 - **Conversation context** — remembers last 5 messages per chat for follow-up questions (e.g., "a co o víkendech?" after asking about noise rules)
 - **Smart silence** — in groups, the bot stays silent when it doesn't have a useful answer instead of saying "I don't know"
-- **Daily fact-check** — collects all group messages and runs a nightly fact-check against SVJ documents; sends findings to admin via DM
+- **Daily fact-check** — collects all group messages and runs a nightly fact-check against SVJ documents; sends findings to admin via DM. *Currently disabled* (see below)
 - **Finance topic blocking** — refuses to answer questions about fees, payments, budgets — redirects to the committee
 - **Prompt injection protection** — refuses to reveal instructions, settings, or document names
 - **Rate limiting** — DMs limited to 10 messages/hour per sender to prevent abuse
 - **Admin commands** — `!reload` to refresh knowledge base, `!factcheck` to trigger manual fact-check (admin-only)
-- **Auto-reload** — documents refresh from Google Drive every hour
+- **Document reload** — the knowledge base is cached for an hour, rebuilt lazily on the next request that needs it, plus nightly at 22:00 via cron
 - **Group whitelist** — bot only operates in explicitly allowed groups; silently ignores messages from unauthorized groups
 - **Human-like behavior** — typing indicators, read receipts (`sendSeen`), variable response delays, presence signaling — reduces WhatsApp detection risk
 - **Quiet hours** — bot does not respond in groups between 23:00–06:00 CET
@@ -77,6 +77,23 @@ This prevents the bot from responding to every message in the group.
 The bot silently logs all group messages throughout the day. At 22:00 (via cron), it sends the full day's conversation along with SVJ documents to the LLM for fact-checking. If any member stated something factually incorrect about SVJ rules, the admin receives a DM with the findings. If everything is correct, a simple ✅ confirmation is sent.
 
 This can also be triggered manually with `!factcheck`.
+
+### Currently disabled
+
+The nightly run is commented out in the crontab. It shipped the whole
+knowledge base (~35k tokens) every night regardless of whether anything
+had happened, which was about half of all token usage and more than the
+free tier allows in one request — it had already failed that way once.
+The 22:00 slot now calls `/reload` instead, which refreshes the documents
+from Drive without touching the LLM.
+
+To turn it back on, swap the two cron lines back:
+
+```bash
+crontab -e
+```
+
+`!factcheck` still works for a manual run.
 
 ## Setup
 
