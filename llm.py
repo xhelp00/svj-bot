@@ -9,6 +9,11 @@ from secret_manager import get_secret
 
 logger = logging.getLogger(__name__)
 
+# Model names are env-overridable so a deprecation can be worked around by
+# editing docker-compose, without rebuilding the image.
+RESPONSE_MODEL = os.environ.get("GEMINI_RESPONSE_MODEL", "gemini-3.5-flash-lite")
+CLASSIFIER_MODEL = os.environ.get("GEMINI_CLASSIFIER_MODEL", "gemini-3.5-flash-lite")
+
 _model = None
 _classifier_model = None
 
@@ -19,13 +24,13 @@ def _get_model():
     if _model is None:
         genai.configure(api_key=get_secret("GEMINI_API_KEY"))
         _model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash-lite",
+            model_name=RESPONSE_MODEL,
             generation_config=genai.GenerationConfig(
                 temperature=0.6,
                 max_output_tokens=1024,
             ),
         )
-        logger.info("Gemini model initialized")
+        logger.info(f"Gemini model initialized: {RESPONSE_MODEL}")
     return _model
 
 
@@ -35,14 +40,41 @@ def _get_classifier_model():
     if _classifier_model is None:
         genai.configure(api_key=get_secret("GEMINI_API_KEY"))
         _classifier_model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash-lite",
+            model_name=CLASSIFIER_MODEL,
             generation_config=genai.GenerationConfig(
                 temperature=0.0,
                 max_output_tokens=10,
             ),
         )
-        logger.info("Classifier model initialized")
+        logger.info(f"Classifier model initialized: {CLASSIFIER_MODEL}")
     return _classifier_model
+
+
+def check_models_available() -> list[str]:
+    """
+    Verify the configured models still exist.
+
+    Listing models is a metadata call, so this works even when the account has
+    no credits. A retired model otherwise shows up as a 404 on the first real
+    request, which looks like the bot silently going mute.
+
+    Returns a list of problem descriptions; empty means everything is fine.
+    """
+    try:
+        genai.configure(api_key=get_secret("GEMINI_API_KEY"))
+        available = {
+            m.name.removeprefix("models/")
+            for m in genai.list_models()
+            if "generateContent" in m.supported_generation_methods
+        }
+    except Exception as e:
+        return [f"Nelze ověřit dostupnost modelů: {e}"]
+
+    problems = []
+    for role, name in (("odpovědi", RESPONSE_MODEL), ("klasifikátor", CLASSIFIER_MODEL)):
+        if name not in available:
+            problems.append(f"Model pro {role} '{name}' už není dostupný")
+    return problems
 
 
 CLASSIFIER_PROMPT = """Jsi klasifikátor zpráv pro chatbota SVJ (Společenství vlastníků jednotek).

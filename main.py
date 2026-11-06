@@ -12,7 +12,14 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from knowledge_base import build_knowledge_base, invalidate_cache
-from llm import generate_response, should_respond, fact_check_messages
+from llm import (
+    generate_response,
+    should_respond,
+    fact_check_messages,
+    check_models_available,
+    RESPONSE_MODEL,
+    CLASSIFIER_MODEL,
+)
 
 load_dotenv()
 
@@ -23,6 +30,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="SVJ Bot", version="2.0.0")
+
+
+@app.on_event("startup")
+async def verify_models():
+    """Warn loudly at startup if a configured model has been retired."""
+    logger.info(f"Models configured — response: {RESPONSE_MODEL}, classifier: {CLASSIFIER_MODEL}")
+    for problem in check_models_available():
+        logger.error(f"[MODEL] {problem}")
 
 # Building name for the system prompt
 BUILDING_NAME = os.environ.get("BUILDING_NAME", "SVJ")
